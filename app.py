@@ -4,8 +4,9 @@ from functions import input_prompt
 
 print("This is my AI agent application.")
 
-input = "Explain how AI works in a few words but in girly pop terms"
+input = "Explain how AI works in a lotta words but in girly pop terms"
 model = "gemini-3.8-flash"
+# model = "gemini-3.5-flash-lite"
 
 print("Input entered as prompt: ",input)
 print("Model selected: ",model)

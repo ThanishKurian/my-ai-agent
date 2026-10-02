@@ -9,7 +9,6 @@ def input_prompt(input, model, logging_on=True):
     GEMINI_API_KEY = "AIzaSyDZov7d8dPIxrnsy3GMR-2ZoahYUgJb4QU"
     if logging_on:
         logger.info("API Key is set. Sending request to Gemini API... ")
-
     output_response = "No valid response received from Gemini API."
 
     try:
@@ -23,7 +22,8 @@ def input_prompt(input, model, logging_on=True):
             },
             json={
                 "model": model,
-                "input": input
+                "input": input,
+                "stream": True
             }
         )
 
