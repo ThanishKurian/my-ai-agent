@@ -1,53 +1,107 @@
-import logging
-import requests
 import json
+import logging
+import os
+
+import requests
+
 logger = logging.getLogger(__name__)
 
-def input_prompt(input, model, logging_on=True):
-    # This function takes an input prompt and a model name, and returns the output from the Gemini API.
 
-    GEMINI_API_KEY = "AIzaSyDZov7d8dPIxrnsy3GMR-2ZoahYUgJb4QU"
+def _get_openrouter_headers():
+    secrets_file_path = r"C:\Users\User\Desktop\secrets.json"
+    api_key = None
+    if os.path.exists(secrets_file_path):
+        with open(secrets_file_path, "r") as f:
+            secrets = json.load(f)
+            api_key = secrets.get("api_key")
+    if not api_key:
+        api_key = os.getenv("OPENROUTER_API_KEY")
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY is not set. Add it to your environment before running the app.")
+
+    return {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://localhost",
+        "X-Title": "my-ai-agent",
+    }
+
+
+def input_prompt(prompt, model=None, logging_on=True):
+    """Send a prompt to OpenRouter and return the full generated text."""
+    model_name = model or os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = _get_openrouter_headers()
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": False,
+    }
+
     if logging_on:
-        logger.info("API Key is set. Sending request to Gemini API... ")
-
-    output_response = "No valid response received from Gemini API."
+        logger.info("Sending request to OpenRouter model '%s'...", model_name)
 
     try:
-        response = requests.request(
-            method="POST",
-            url="https://generativelanguage.googleapis.com/v1beta/interactions",
-            headers={
-                "x-goog-api-key": GEMINI_API_KEY,
-                "Content-Type": "application/json",
-                "Api-Revision": "2026-05-20"
-            },
-            json={
-                "model": model,
-                "input": input
-            }
-        )
+        response = requests.post(url, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        response_data = response.json()
+        content = response_data["choices"][0]["message"]["content"]
 
         if logging_on:
-            logger.info("Request sent successfully. Processing response...")
+            logger.info("Response received from OpenRouter:")
+            logger.info(content)
 
-        if response.status_code == 200:
-            response_data = response.json()
-            if logging_on:
-                logger.info("Response received from Gemini API:")
-                logger.info(json.dumps(response_data, indent=2))
-                logger.info("Output from Gemini API:")
-            output = response_data["steps"][1]["content"][0]["text"]
-            return output
-        else:
-            if logging_on:
-                logger.error("Failed to get a successful response from Gemini API.")
-                logger.error("Status Code:", response.status_code)
-                logger.error("Response Text:", response.text)
+        return content
 
-    except Exception as e:
-        if logging_on:
-            logger.error("Error occurred while sending request to Gemini API.")
-            logger.error("Error message:", str(e))
-        return "Error occurred while sending request to Gemini API."
+    except requests.exceptions.HTTPError as exc:
+        error_details = exc.response.text if exc.response is not None else str(exc)
+        raise RuntimeError(f"OpenRouter request failed: {error_details}") from exc
 
-    return output_response
+    except Exception as exc:
+        raise RuntimeError(f"Error occurred while sending request to OpenRouter: {exc}") from exc
+
+
+def stream_prompt(prompt, model=None, logging_on=True):
+    """Send a prompt to OpenRouter and print the response as it streams in."""
+    model_name = model or os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = _get_openrouter_headers()
+    payload = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": prompt}],
+        "stream": True,
+    }
+
+    if logging_on:
+        logger.info("Streaming request to OpenRouter model '%s'...", model_name)
+
+    try:
+        with requests.post(url, headers=headers, json=payload, stream=True, timeout=120) as response:
+            response.raise_for_status()
+
+            for line in response.iter_lines(decode_unicode=True):
+                if not line:
+                    continue
+
+                if line.startswith("data: "):
+                    data = line[len("data: "):].strip()
+                    if data == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(data)
+                        delta = chunk["choices"][0].get("delta", {}).get("content")
+                        if delta:
+                            print(delta, end="", flush=True)
+                    except json.JSONDecodeError:
+                        continue
+
+        print()
+        return None
+
+    except requests.exceptions.HTTPError as exc:
+        error_details = exc.response.text if exc.response is not None else str(exc)
+        raise RuntimeError(f"OpenRouter stream failed: {error_details}") from exc
+
+    except Exception as exc:
+        raise RuntimeError(f"Error occurred while streaming from OpenRouter: {exc}") from exc
