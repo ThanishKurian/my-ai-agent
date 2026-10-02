@@ -1,16 +1,26 @@
 print("Hello world!")
 
-from functions import input_prompt
+import os
+
+from functions import input_prompt, stream_prompt
 
 print("This is my AI agent application.")
 
-input = "Explain how AI works in a few words but in girly pop terms"
-model = "gemini-3.8-flash"
+prompt = "Explain how AI works in a lotta words but in girly pop terms"
+model = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
 
-print("Input entered as prompt: ",input)
-print("Model selected: ",model)
+print("Input entered as prompt: ", prompt)
+print("Model selected: ", model)
 print("\n")
 
-output_response = input_prompt(input, model, logging_on=True)
-print("\n\nReturning output from Gemini API: \n","*"*100,"\n\n",output_response)
+try:
+    print("\n--- normal return mode ---")
+    output_response = input_prompt(prompt, model=model, logging_on=False)
+    print("\nFinal returned text:")
+    print(output_response)
+
+    # print("\n--- streaming print mode ---")
+    # stream_prompt(prompt, model=model, logging_on=False)
+except Exception as exc:
+    print(f"\n\nError: {exc}")
 
